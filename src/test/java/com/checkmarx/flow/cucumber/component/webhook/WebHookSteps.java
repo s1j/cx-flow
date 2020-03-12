@@ -1,8 +1,11 @@
 package com.checkmarx.flow.cucumber.component.webhook;
 
 import com.checkmarx.flow.config.GitHubProperties;
+import com.checkmarx.flow.config.JiraProperties;
 import com.checkmarx.flow.cucumber.common.utils.TestUtils;
+import com.checkmarx.flow.service.WebHookService;
 import io.cucumber.java.Before;
+import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -44,9 +47,14 @@ public class WebHookSteps {
 
     @Autowired
     private GitHubProperties gitHubProperties;
+    @Autowired
+    WebHookService webHookService;
 
     private HttpEntity<String> webHookRequest;
     private String cxFlowPort;
+
+    @Autowired
+    private JiraProperties jiraProperties;
 
     Properties testProperties;
 
@@ -55,13 +63,14 @@ public class WebHookSteps {
         testProperties = TestUtils.getPropertiesFromResource("cucumber/features/componentTests/webhook.properties");
     }
 
+
     @Given("CxFlow is running as a service")
     public void runAsService() {
         ConfigurableApplicationContext appContext = TestUtils.runCxFlowAsService();
         cxFlowPort = appContext.getEnvironment().getProperty("server.port");
     }
 
-    @When("GitHub sends WebHook requests to CxFlow {int} times per second")
+    @When("receive WebHook requests at a pace of {int} requests times per second")
     public void githubSendsWebHookRequests(int timesPerSecond) {
         final int MILLISECONDS_IN_SECOND = 1000;
 
@@ -82,6 +91,23 @@ public class WebHookSteps {
 
         waitForAllTasksToComplete(requestSendingTasks);
     }
+
+    @When("adding webhook for {string}")
+    public void addWebHook(String type) {
+        TestUtils.runCreateOrgWebHook(jiraProperties.getUrl(), gitHubProperties.getToken(), "/hila/temp/orgList.json");
+    }
+
+    @And("organizations were saved to file")
+    public void organizationsWereSavedToFile() {
+        TestUtils.runCreateOrgFile(gitHubProperties.getApiUrl(), gitHubProperties.getToken(), "/hila/temp/orgList.json");
+    }
+
+    @Then("webhook created")
+    public void checkWebHookCreated() {
+        String repoHooksBaseUrl = String.format("%s/hooks", gitHubProperties.getApiUrl());
+        Assert.assertTrue(webHookService.checkHookExist(repoHooksBaseUrl, gitHubProperties.getToken()));
+    }
+
 
     /**
      * First request can take much longer time than subsequent requests due to web server "warm up",
@@ -194,4 +220,6 @@ public class WebHookSteps {
             return null;
         }
     }
+
+
 }

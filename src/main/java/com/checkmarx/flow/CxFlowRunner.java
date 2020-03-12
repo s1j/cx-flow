@@ -7,25 +7,28 @@ import com.checkmarx.flow.dto.ScanRequest;
 import com.checkmarx.flow.exception.ExitThrowable;
 import com.checkmarx.flow.service.FlowService;
 import com.checkmarx.flow.service.HelperService;
+import com.checkmarx.flow.service.WebHookService;
 import com.checkmarx.flow.utils.ScanUtils;
 import com.checkmarx.sdk.config.Constants;
 import com.checkmarx.sdk.config.CxProperties;
 import com.checkmarx.sdk.dto.Filter;
 import com.checkmarx.sdk.dto.ScanResults;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.MDC;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static com.checkmarx.flow.exception.ExitThrowable.exit;
 
@@ -41,12 +44,13 @@ public class CxFlowRunner implements ApplicationRunner {
     private final ADOProperties adoProperties;
     private final HelperService helperService;
     private final FlowService flowService;
+    private final WebHookService webHookService;
     private final List<ThreadPoolTaskExecutor> executors;
 
     public CxFlowRunner(FlowProperties flowProperties,
                         CxProperties cxProperties, JiraProperties jiraProperties,
                         GitHubProperties gitHubProperties, GitLabProperties gitLabProperties,
-                        ADOProperties adoProperties, FlowService flowService, HelperService helperService, List<ThreadPoolTaskExecutor> executors) {
+                        ADOProperties adoProperties, FlowService flowService, HelperService helperService, WebHookService webHookService, List<ThreadPoolTaskExecutor> executors) {
         this.flowProperties = flowProperties;
         this.cxProperties = cxProperties;
         this.jiraProperties = jiraProperties;
@@ -55,6 +59,7 @@ public class CxFlowRunner implements ApplicationRunner {
         this.adoProperties = adoProperties;
         this.flowService = flowService;
         this.helperService = helperService;
+        this.webHookService = webHookService;
         this.executors = executors;
     }
 
@@ -64,11 +69,57 @@ public class CxFlowRunner implements ApplicationRunner {
             try {
                 if (args.containsOption("web")) {
                     log.debug("Running web mode");
-                } else {
+                } else if (args.containsOption("createOrgList")) {
+                    if (args.getNonOptionArgs().size() < 2) {
+                        log.error("Usage: cxflow --createOrgList  [gitHubApiUrl, gitHubToken, pathToFile]");
+                        log.error("Arguments mismatch, see usage ");
+                    }
+                    else {
+                        log.debug("Running webhook service - creating organization list");
+                         webHookService.createOrganizationFile(args.getNonOptionArgs().get(0), args.getNonOptionArgs().get(1), Paths.get(args.getNonOptionArgs().get(2)));
+                    }
+                } else if (args.containsOption("createOrgWebHook")) {
+                    if (args.getNonOptionArgs().size() < 3) {
+                        log.error("Usage: cxflow --createOrgWebHook [bugTrackerUrl, gitHubToken, pathToFile]");
+                        log.error("Arguments mismatch, see usage ");
+                    }
+                    else {
+                        log.debug("Running webhook service - creating webHooks for organizations");
+
+                        Map<String, String> failedWebHooks = webHookService.generateOrgPushWebHook(args.getNonOptionArgs().get(0), args.getNonOptionArgs().get(1), Paths.get(args.getNonOptionArgs().get(2)));
+                        writeError(failedWebHooks);
+                    }
+                }
+                else if (args.containsOption("createReposForOrgList")) {
+                    if (args.getNonOptionArgs().size() < 3) {
+                        log.error("Usage: cxflow --createReposList [gitHubApiUrl, gitHubToken, pathToOrgFile, pathToRepoFile]");
+                        log.error("Arguments mismatch, see usage ");
+                    }
+                    else {
+                        log.debug("Running webhook service - creating repository list per organization");
+                        webHookService.createRepositoriesFile(args.getNonOptionArgs().get(0), args.getNonOptionArgs().get(1), Paths.get(args.getNonOptionArgs().get(2)), Paths.get(args.getNonOptionArgs().get(3)));
+                    }
+                }
+                else if (args.containsOption("createRepoWebHook")) {
+                    if (args.getNonOptionArgs().size() < 3) {
+                        log.error("Usage: cxflow --createRepoWebHook [bugTrackerUrl, gitHubToken, pathToFile]");
+                        log.error("Arguments mismatch, see usage ");
+                    }
+                    else {
+                        log.debug("Running webhook service - creating webHooks for Repositories");
+
+                        Map<String, String> failedWebHooks = webHookService.generateRepoPushWebHook(args.getNonOptionArgs().get(0), args.getNonOptionArgs().get(1), Paths.get(args.getNonOptionArgs().get(2)));
+                        writeError(failedWebHooks);
+                    }
+                }
+                else {
                     log.debug("Running cmd mode. Parameters: " + String.join(" ", args.getSourceArgs()));
                     commandLineRunner(args);
                 }
-            } catch (ExitThrowable ee) {
+
+            }
+
+           catch (ExitThrowable  ee) {
                 if (args.containsOption("blocksysexit")) {
                     throw new InvocationTargetException(ee);
                 }
@@ -79,6 +130,16 @@ public class CxFlowRunner implements ApplicationRunner {
                     executors.forEach(ThreadPoolTaskExecutor::shutdown);
                 }
             }
+        }
+    }
+
+    private void writeError(Map<String, String> failedWebHooks){
+        if (failedWebHooks != null && !failedWebHooks.isEmpty()) {
+            StringBuilder failedWebHooksMsg = new StringBuilder("The following webHook failed: \n");
+            for (String failedWebHook : failedWebHooks.keySet()) {
+                failedWebHooksMsg.append(failedWebHook).append(" with error message: ").append(failedWebHooks.get(failedWebHook)).append("\n");
+            }
+            log.error(failedWebHooksMsg.toString());
         }
     }
 
@@ -98,7 +159,7 @@ public class CxFlowRunner implements ApplicationRunner {
         String preset = null;
         String team;
         String cxProject;
-		String altProject;
+        String altProject;
         String altFields;
         String config;
         List<String> severity;
@@ -114,14 +175,14 @@ public class CxFlowRunner implements ApplicationRunner {
         String uid = helperService.getShortUid();
         MDC.put("cx", uid);
 
-        if(args.containsOption("branch-create")){
+        if (args.containsOption("branch-create")) {
             exit(0);
         }
-        if(args.containsOption("branch-delete")){
+        if (args.containsOption("branch-delete")) {
             exit(0);
         }
 
-        if(!args.containsOption("scan") && !args.containsOption("parse") && !args.containsOption("batch") && !args.containsOption("project")){
+        if (!args.containsOption("scan") && !args.containsOption("parse") && !args.containsOption("batch") && !args.containsOption("project")) {
             log.error("--scan | --parse | --batch | --project option must be specified");
             exit(1);
         }
@@ -138,20 +199,20 @@ public class CxFlowRunner implements ApplicationRunner {
 
         /*Collect command line options (String)*/
         bugTracker = getOptionValues(args, "bug-tracker");
-        file = getOptionValues(args,"f");
-        libFile = getOptionValues(args,"lib-file");
-        repoName = getOptionValues(args,"repo-name");
-        repoUrl = getOptionValues(args,"repo-url");
-        branch = getOptionValues(args,"branch");
-        namespace = getOptionValues(args,"namespace");
-        team = getOptionValues(args,"cx-team");
-		altProject = getOptionValues(args,"alt-project");
-        altFields = getOptionValues(args,"alt-fields");
-        cxProject = getOptionValues(args,"cx-project");
-        application = getOptionValues(args,"app");
-        assignee = getOptionValues(args,"assignee");
-        mergeId = getOptionValues(args,"merge-id");
-        preset = getOptionValues(args,"preset");
+        file = getOptionValues(args, "f");
+        libFile = getOptionValues(args, "lib-file");
+        repoName = getOptionValues(args, "repo-name");
+        repoUrl = getOptionValues(args, "repo-url");
+        branch = getOptionValues(args, "branch");
+        namespace = getOptionValues(args, "namespace");
+        team = getOptionValues(args, "cx-team");
+        altProject = getOptionValues(args, "alt-project");
+        altFields = getOptionValues(args, "alt-fields");
+        cxProject = getOptionValues(args, "cx-project");
+        application = getOptionValues(args, "app");
+        assignee = getOptionValues(args, "assignee");
+        mergeId = getOptionValues(args, "merge-id");
+        preset = getOptionValues(args, "preset");
         osa = args.getOptionValues("osa") != null;
         /*Collect command line options (List of Strings)*/
         emails = args.getOptionValues("emails");
@@ -164,7 +225,7 @@ public class CxFlowRunner implements ApplicationRunner {
         boolean bb = args.containsOption("bb"); //BitBucket Cloud
         boolean bbs = args.containsOption("bbs"); //BitBucket Server
 
-        if(((ScanUtils.empty(namespace) && ScanUtils.empty(repoName) && ScanUtils.empty(branch)) &&
+        if (((ScanUtils.empty(namespace) && ScanUtils.empty(repoName) && ScanUtils.empty(branch)) &&
                 ScanUtils.empty(application)) && !args.containsOption("batch")) {
             log.error("Namespace/Repo/Branch or Application (app) must be provided");
             exit(1);
@@ -172,33 +233,32 @@ public class CxFlowRunner implements ApplicationRunner {
 
         /*Determine filters, if any*/
         List<Filter> filters;
-        if(!ScanUtils.empty(severity) || !ScanUtils.empty(cwe) || !ScanUtils.empty(category) || !ScanUtils.empty(status) ){
+        if (!ScanUtils.empty(severity) || !ScanUtils.empty(cwe) || !ScanUtils.empty(category) || !ScanUtils.empty(status)) {
             filters = ScanUtils.getFilters(severity, cwe, category, status);
-        }
-        else{
+        } else {
             filters = ScanUtils.getFilters(flowProperties);
         }
         //Adding default file/folder exclusions from properties if they are not provided as an override
-        if(excludeFiles == null && !ScanUtils.empty(cxProperties.getExcludeFiles())){
+        if (excludeFiles == null && !ScanUtils.empty(cxProperties.getExcludeFiles())) {
             excludeFiles = Arrays.asList(cxProperties.getExcludeFiles().split(","));
         }
-        if(excludeFolders == null && !ScanUtils.empty(cxProperties.getExcludeFolders())){
+        if (excludeFolders == null && !ScanUtils.empty(cxProperties.getExcludeFolders())) {
             excludeFolders = Arrays.asList(cxProperties.getExcludeFolders().split(","));
         }
         //set the default bug tracker as per yml
         BugTracker.Type bugType = null;
         if (ScanUtils.empty(bugTracker)) {
-            bugTracker =  flowProperties.getBugTracker();
+            bugTracker = flowProperties.getBugTracker();
         }
         try {
             bugType = ScanUtils.getBugTypeEnum(bugTracker, flowProperties.getBugTrackerImpl());
-        }catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             log.error("No valid bug tracker was provided", e);
             exit(1);
         }
         ScanRequest.Product p;
-        if(osa){
-            if(libFile == null){
+        if (osa) {
+            if (libFile == null) {
                 log.error("Both vulnerabilities file (f) and libraries file (lib-file) must be provided for OSA");
                 exit(1);
             }
@@ -207,13 +267,13 @@ public class CxFlowRunner implements ApplicationRunner {
             p = ScanRequest.Product.CX;
         }
 
-        if(ScanUtils.empty(preset)){
+        if (ScanUtils.empty(preset)) {
             preset = cxProperties.getScanPreset();
         }
 
         BugTracker bt = null;
         String gitAuthUrl = null;
-        switch (bugType){
+        switch (bugType) {
             case WAIT:
             case wait:
                 log.info("No bug tracker will be used...waiting for scan to complete");
@@ -253,7 +313,7 @@ public class CxFlowRunner implements ApplicationRunner {
                         .build();
                 repoType = ScanRequest.Repository.ADO;
 
-                if(ScanUtils.empty(namespace) ||ScanUtils.empty(repoName)||ScanUtils.empty(mergeId)){
+                if (ScanUtils.empty(namespace) || ScanUtils.empty(repoName) || ScanUtils.empty(mergeId)) {
                     log.error("Namespace/Repo/MergeId must be provided for ADOPULL bug tracking");
                     exit(1);
                 }
@@ -267,7 +327,7 @@ public class CxFlowRunner implements ApplicationRunner {
                         .build();
                 repoType = ScanRequest.Repository.GITHUB;
 
-                if(ScanUtils.empty(namespace) ||ScanUtils.empty(repoName)||ScanUtils.empty(mergeId)){
+                if (ScanUtils.empty(namespace) || ScanUtils.empty(repoName) || ScanUtils.empty(mergeId)) {
                     log.error("Namespace/Repo/MergeId must be provided for GITHUBPULL bug tracking");
                     exit(1);
                 }
@@ -316,20 +376,19 @@ public class CxFlowRunner implements ApplicationRunner {
                 .excludeFiles(excludeFiles)
                 .bugTracker(bt)
                 .filters(filters)
-				.altProject(altProject)
+                .altProject(altProject)
                 .altFields(altFields)
                 .build();
 
         request = ScanUtils.overrideMap(request, o);
         /*Determine if BitBucket Cloud/Server is being used - this will determine formatting of URL that links to file/line in repository */
         request.setId(uid);
-        if(bb){
+        if (bb) {
             request.setRepoType(ScanRequest.Repository.BITBUCKETSERVER);
             //TODO create browse code url
-        }
-        else if(bbs){
+        } else if (bbs) {
             request.setRepoType(ScanRequest.Repository.BITBUCKETSERVER);
-            if(repoUrl != null) {
+            if (repoUrl != null) {
                 repoUrl = repoUrl.replaceAll("\\/scm\\/", "/projects/");
                 repoUrl = repoUrl.replaceAll("\\/[\\w-]+.git$", "/repos$0");
                 repoUrl = repoUrl.replaceAll(".git$", "");
@@ -339,47 +398,44 @@ public class CxFlowRunner implements ApplicationRunner {
         }
 
         try {
-            if(args.containsOption("parse")){
+            if (args.containsOption("parse")) {
 
                 File f = new File(file);
-                if(!f.exists()){
+                if (!f.exists()) {
                     log.error("Result File not found {}", file);
                     exit(2);
                 }
-                if(osa){ //grab the libs file if OSA results
+                if (osa) { //grab the libs file if OSA results
                     File libs = new File(libFile);
-                    if(!libs.exists()){
+                    if (!libs.exists()) {
                         log.error("Library File not found {}", file);
                         exit(2);
                     }
                     cxOsaParse(request, f, libs);
                 } else { //SAST
-                    if(args.containsOption("offline")){
+                    if (args.containsOption("offline")) {
                         cxProperties.setOffline(true);
                     }
                     log.info("Processing Checkmarx result file {}", file);
 
                     cxParse(request, f);
                 }
-            }
-            else if(args.containsOption("batch")){
+            } else if (args.containsOption("batch")) {
                 log.info("Executing batch process");
                 cxBatch(request);
-            }
-            else if(args.containsOption("project")){
-                if(ScanUtils.empty(cxProject)){
+            } else if (args.containsOption("project")) {
+                if (ScanUtils.empty(cxProject)) {
                     log.error("cx-project must be provided when --project option is used");
                     exit(2);
                 }
                 cxResults(request);
-            }
-            else if(args.containsOption("scan")){
+            } else if (args.containsOption("scan")) {
                 log.info("Executing scan process");
                 //GitHub Scan with Git Clone
-                if(args.containsOption("github")){
-                    if(ScanUtils.empty(repoUrl) && !ScanUtils.anyEmpty(namespace, repoName)) {
+                if (args.containsOption("github")) {
+                    if (ScanUtils.empty(repoUrl) && !ScanUtils.anyEmpty(namespace, repoName)) {
                         repoUrl = gitHubProperties.getGitUri(namespace, repoName);
-                    } else if(ScanUtils.empty(repoUrl)){
+                    } else if (ScanUtils.empty(repoUrl)) {
                         log.error("Unable to determine git url for scanning, exiting...");
                         exit(2);
                     }
@@ -389,10 +445,10 @@ public class CxFlowRunner implements ApplicationRunner {
 
                     cxScan(request, repoUrl, gitAuthUrl, branch, ScanRequest.Repository.GITHUB);
                 } //GitLab Scan with Git Clone
-                else if(args.containsOption("gitlab") &&  !ScanUtils.anyEmpty(namespace, repoName)){
-                    if(ScanUtils.empty(repoUrl) && !ScanUtils.anyEmpty(namespace, repoName)) {
+                else if (args.containsOption("gitlab") && !ScanUtils.anyEmpty(namespace, repoName)) {
+                    if (ScanUtils.empty(repoUrl) && !ScanUtils.anyEmpty(namespace, repoName)) {
                         repoUrl = gitLabProperties.getGitUri(namespace, repoName);
-                    } else if(ScanUtils.empty(repoUrl)){
+                    } else if (ScanUtils.empty(repoUrl)) {
                         log.error("Unable to determine git url for scanning, exiting...");
                         exit(2);
                     }
@@ -400,21 +456,17 @@ public class CxFlowRunner implements ApplicationRunner {
                     gitAuthUrl = repoUrl.replace(Constants.HTTPS, Constants.HTTPS_OAUTH2.concat(token).concat("@"));
                     gitAuthUrl = gitAuthUrl.replace(Constants.HTTP, Constants.HTTP_OAUTH2.concat(token).concat("@"));
                     cxScan(request, repoUrl, gitAuthUrl, branch, ScanRequest.Repository.GITLAB);
-                }
-                else if(args.containsOption("bitbucket") && containsRepoArgs(namespace, repoName, branch)){
+                } else if (args.containsOption("bitbucket") && containsRepoArgs(namespace, repoName, branch)) {
                     log.warn("Bitbucket git clone scan not implemented");
-                }
-                else if(args.containsOption("ado") && containsRepoArgs(namespace, repoName, branch)){
+                } else if (args.containsOption("ado") && containsRepoArgs(namespace, repoName, branch)) {
                     log.warn("Azure DevOps git clone scan not implemented");
-                }
-                else if(file != null) {
-                        cxScan(request, file);
-                    }
-                else{
-                        log.error("No valid option was provided for driving scan");
+                } else if (file != null) {
+                    cxScan(request, file);
+                } else {
+                    log.error("No valid option was provided for driving scan");
                 }
             }
-        }catch (Exception e){
+        } catch (Exception e) {
             log.error("An error occurred while processing request", e);
             exit(10);
         }
@@ -422,18 +474,18 @@ public class CxFlowRunner implements ApplicationRunner {
 //        exit(0);
     }
 
-    private boolean containsRepoArgs(String namespace, String repoName, String branch){
+    private boolean containsRepoArgs(String namespace, String repoName, String branch) {
         return (!ScanUtils.empty(namespace) &&
                 !ScanUtils.empty(repoName) &&
                 !ScanUtils.empty(branch));
     }
 
-    private String getOptionValues(ApplicationArguments arg, String option){
-        if(arg != null && option != null) {
+    private String getOptionValues(ApplicationArguments arg, String option) {
+        if (arg != null && option != null) {
             List<String> values = arg.getOptionValues(option);
             return ScanUtils.empty(values) ? null : values.get(0);
         } else {
-            return  null;
+            return null;
         }
     }
 
@@ -447,25 +499,30 @@ public class CxFlowRunner implements ApplicationRunner {
         request.setRefs(Constants.CX_BRANCH_PREFIX.concat(branch));
         flowService.cxFullScan(request);
     }
+
     private void cxScan(ScanRequest request, String path) throws ExitThrowable {
-        if(ScanUtils.empty(request.getProject())){
+        if (ScanUtils.empty(request.getProject())) {
             log.error("Please provide --cx-project to define the project in Checkmarx");
             exit(2);
         }
         flowService.cxFullScan(request, path);
     }
+
     private void cxOsaParse(ScanRequest request, File file, File libs) throws ExitThrowable {
         flowService.cxOsaParseResults(request, file, libs);
     }
+
     private void cxParse(ScanRequest request, File file) throws ExitThrowable {
         flowService.cxParseResults(request, file);
     }
+
     private void cxBatch(ScanRequest request) throws ExitThrowable {
         flowService.cxBatch(request);
     }
+
     private void cxResults(ScanRequest request) throws ExitThrowable {
         ScanResults results = flowService.cxGetResults(request, null).join();
-        if(flowProperties.isBreakBuild() && results !=null && results.getXIssues()!=null && !results.getXIssues().isEmpty()){
+        if (flowProperties.isBreakBuild() && results != null && results.getXIssues() != null && !results.getXIssues().isEmpty()) {
             log.error("Exiting with Error code 10 due to issues present");
             exit(10);
         }

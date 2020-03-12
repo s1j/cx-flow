@@ -48,10 +48,10 @@ cx-flow:
 
 
 checkmarx:
-  username: xxx
-  password: xxx
+  username: Administrator
+  password: CxSEGnum1
   client-secret: 014DF517-39D1-4453-B7B3-9930C563627C
-  base-url: http://localhost:8100
+  base-url: http://10.32.0.237:8100
   url: ${checkmarx.base-url}/cxrestapi
   multi-tenant: true
   incremental: true
@@ -76,7 +76,7 @@ checkmarx:
   #exclude-folders:
 
 jira:
-  url: http://localhost:8080
+  url: https://hilatesting.atlassian.net
   username: xxxx
   token: xxxx
   project: APPSEC
@@ -137,9 +137,9 @@ jira:
 
 github:
   webhook-token: 1234
-  token: xxxx
-  url: https://github.com
-  api-url: https://api.github.com/repos/
+  token: 0a0e9dda0b8b6dffb9f01f4b611a7d13a0afd167
+  url: https://github.com/HilaElk
+  api-url: https://api.github.com/
   block-merge: true
   error-merge: true
   cx-summary: true

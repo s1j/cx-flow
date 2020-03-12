@@ -30,6 +30,14 @@ public class TestUtils {
         return classLoader.getResourceAsStream(srcResourcePath);
     }
 
+    public static ConfigurableApplicationContext runCreateOrgFile(String apiUrl, String gitHubToken, String pathToFile) {
+        return SpringApplication.run(CxFlowApplication.class, "--createOrgList", apiUrl, gitHubToken, pathToFile);
+    }
+
+    public static ConfigurableApplicationContext runCreateOrgWebHook(String bugTrackerUrl, String gitHubToken, String pathToFile) {
+        return SpringApplication.run(CxFlowApplication.class, "--createOrgWebHook", bugTrackerUrl, gitHubToken, pathToFile);
+    }
+
     public static Properties getPropertiesFromResource(String path) throws IOException {
         File file = ResourceUtils.getFile("classpath:" + path);
         Properties result = new Properties();

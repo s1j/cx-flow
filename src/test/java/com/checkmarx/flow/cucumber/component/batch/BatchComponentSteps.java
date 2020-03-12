@@ -7,6 +7,7 @@ import com.checkmarx.flow.cucumber.common.utils.TestUtils;
 import com.checkmarx.flow.cucumber.component.scan.ScanFixture;
 import com.checkmarx.flow.service.FlowService;
 import com.checkmarx.flow.service.HelperService;
+import com.checkmarx.flow.service.WebHookService;
 import com.checkmarx.sdk.config.CxProperties;
 import com.checkmarx.sdk.exception.CheckmarxException;
 import com.checkmarx.sdk.service.CxClient;
@@ -35,6 +36,7 @@ public class BatchComponentSteps {
     private final ADOProperties adoProperties;
     private final FlowService flowService;
     private final HelperService helperService;
+    private final WebHookService webHookService;
     private final CxClient cxClient;
     private final List<ThreadPoolTaskExecutor> executors;
     private CxFlowRunner cxFlowRunner;
@@ -42,7 +44,7 @@ public class BatchComponentSteps {
     private String teamName;
 
     public BatchComponentSteps(FlowProperties flowProperties, CxProperties cxProperties, JiraProperties jiraProperties, GitHubProperties gitHubProperties, GitLabProperties gitLabProperties,
-                               ADOProperties adoProperties, FlowService flowService, HelperService helperService, CxClient cxClient, List<ThreadPoolTaskExecutor> executors) {
+                               ADOProperties adoProperties, FlowService flowService, HelperService helperService,WebHookService webHookService,  CxClient cxClient, List<ThreadPoolTaskExecutor> executors) {
         this.flowProperties = flowProperties;
         this.cxProperties = cxProperties;
         this.jiraProperties = jiraProperties;
@@ -51,6 +53,7 @@ public class BatchComponentSteps {
         this.adoProperties = adoProperties;
         this.flowService = flowService;
         this.helperService = helperService;
+        this.webHookService = webHookService;
         this.cxClient = cxClient;
         this.executors = executors;
     }
@@ -60,7 +63,7 @@ public class BatchComponentSteps {
         when(cxClient.getTeamId(anyString())).thenReturn(ScanFixture.TEAM_ID);
         when(cxClient.getProjects(anyString())).thenReturn(ScanFixture.getProjects());
         when(cxClient.getReportContentByScanId(ScanFixture.SCAN_ID, ScanFixture.getScanFilters())).thenReturn(ScanFixture.getScanResults());
-        cxFlowRunner = new CxFlowRunner(flowProperties, cxProperties, jiraProperties, gitHubProperties, gitLabProperties, adoProperties, flowService, helperService, executors);
+        cxFlowRunner = new CxFlowRunner(flowProperties, cxProperties, jiraProperties, gitHubProperties, gitLabProperties, adoProperties, flowService, helperService, webHookService, executors);
     }
 
     @Given("project is provided: {string} and team: {string}")
