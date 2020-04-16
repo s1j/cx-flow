@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.StringJoiner;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -83,6 +84,7 @@ public class GitHubToJiraSteps {
     @Autowired
     private JiraProperties jiraProperties;
 
+    private String uuid;
     private URI jiraURI;
     private JiraRestClient client;
     private SearchRestClient searchClient;
@@ -98,9 +100,16 @@ public class GitHubToJiraSteps {
         Properties properties = getProperties();
         String namespace = Optional.ofNullable(System.getenv("HOOK_NAMESPACE")).orElse(properties.getProperty("namespace"));
         String repo = Optional.ofNullable(System.getenv("HOOK_REPO")).orElse(properties.getProperty("repo"));
+        uuid = UUID.randomUUID().toString().replace("-", "");
         String filePath = Optional.ofNullable(properties.getProperty("fileCreatePath"))
             .orElse("{fileCreatePath}")
-            .replace("{fileCreatePath}", "src/main/java/sample/encode.frm");
+            .replace("{fileCreatePath}", "src/main/java/sample/encode.frm")
+            .replace(".", uuid+".");
+        log.info("end to end test on:\nnamespace:{}\nrepository:{}\nfile:{}", 
+            namespace,
+            repo,
+            filePath
+            );
         hookTargetURL = Optional.ofNullable(System.getenv("HOOK_TARGET")).orElse(properties.getProperty("target"));
         COMMIT_FILE_PATH = String.format("%s/%s/%s/contents/%s", gitHubProperties.getApiUrl(), namespace, repo,
                 filePath);
@@ -211,7 +220,8 @@ public class GitHubToJiraSteps {
     @Then("target issues are updated")
     public void validateScanStarted() {
         String severities = "(" + flowProperties.getFilterSeverity().stream().collect(Collectors.joining(",")) + ")";
-        String jql = String.format("project = %s and priority  in %s", jiraProperties.getProject(), severities);
+        String fileCommited = COMMIT_FILE_PATH.substring(COMMIT_FILE_PATH.lastIndexOf("/")+1);
+        String jql = String.format("project = %s and priority  in %s and summary ~ %s", jiraProperties.getProject(), severities, fileCommited);
         HashSet<String> fields = new HashSet<String>();
         fields.addAll(
                 Arrays.asList("key", "project", "issuetype", "summary", "labels", "created", "updated", "status"));
