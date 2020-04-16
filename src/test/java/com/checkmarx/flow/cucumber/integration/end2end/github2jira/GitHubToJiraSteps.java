@@ -34,6 +34,7 @@ import io.cucumber.java.After;
 import io.cucumber.java.en.And;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
+import lombok.extern.slf4j.Slf4j;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -69,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Check cxflow end-2-end SAST flow between GitHub webhook and JIRA
  */
+@Slf4j
 @SpringBootTest(classes = { CxFlowApplication.class })
 public class GitHubToJiraSteps {
 
@@ -97,6 +99,7 @@ public class GitHubToJiraSteps {
 
     @PostConstruct
     public void init() throws IOException {
+        log.debug("Creating environment for e2e test");
         Properties properties = getProperties();
         String namespace = Optional.ofNullable(System.getenv("HOOK_NAMESPACE")).orElse(properties.getProperty("namespace"));
         String repo = Optional.ofNullable(System.getenv("HOOK_REPO")).orElse(properties.getProperty("repo"));
@@ -132,27 +135,33 @@ public class GitHubToJiraSteps {
         Optional.ofNullable(hookId).ifPresent(hookId -> {
             Authorization = "token " + gitHubProperties.getToken();
             deleteHook(hookId);
+            log.info("deleted hook");
         });
         if (getStatus(COMMIT_FILE_PATH).equals(HttpStatus.OK)) {
             deleteFile(COMMIT_FILE_PATH);
+            log.info("deleted file");
         }
         for (String issueCreatedKey : issueCreatedKeys) {
             deleteIssue(issueCreatedKey);
+            log.info("deleted issue {}", issueCreatedKey);
         }
     }
 
     @Given("source is GitHub")
     public void setSourceToGithb() {
+        log.info("setting repository to GitHub");
         Authorization = "token " + gitHubProperties.getToken();
     }
 
     @And("target is Jira")
     public void setTargetToJira() {
+        log.info("Setting bug-tracker to Jira");
         flowProperties.setBugTracker(Type.JIRA.name());
     }
 
     @And("CxFlow is running as a service")
     public void runAsService() {
+        log.info("starting cx-flow as a service");
         TestUtils.runCxFlowAsService();
     }
 
@@ -163,13 +172,15 @@ public class GitHubToJiraSteps {
         JSONArray hooks = getJSONArray(REPO_HOOKS_BASE_URL);
 
         assertNotNull(hooks , "could not create webhook configuration");
-
         if (!hooks.isEmpty()) {//NOSONAR
-            fail("repository alredy has hooks configured");
+            String msg = "repository alredy has hooks configured";
+            log.info(msg);
+            fail(msg);
         }
 
         Hook data = null;
         try {
+            log.info("Generating webhook data");
             data = generateHookData(hookTargetURL, gitHubProperties.getWebhookToken());
         } catch (Exception e) {
             fail("can not create web hook, check parameters");
@@ -181,9 +192,18 @@ public class GitHubToJiraSteps {
             final ResponseEntity<String> response = restTemplate.postForEntity(REPO_HOOKS_BASE_URL, request,
                     String.class);
             assertEquals(HttpStatus.CREATED, response.getStatusCode());
+            log.info("Webhook created");
             hookId = new JSONObject(response.getBody()).getInt("id");
         } catch (Exception e) {
-            fail("failed to create hook " + e.getMessage());
+            String msg = "failed to create hook ";
+            log.error(msg);
+            fail(msg + e.getMessage());
+        }
+        try {
+            log.info("waiting for hook to refresh");
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException ie) {
+            log.info("waiting for hook to refresh done");
         }
     }
 
@@ -203,8 +223,11 @@ public class GitHubToJiraSteps {
             jo.putPOJO("committer", committer);
             jo.put("content", content);
             data = mapper.writeValueAsString(jo);
+            log.info("created file to push");
         } catch (Exception e) {
-            fail("faild to create file for push");
+            String msg = "faild to create file for push";
+            log.error(msg);
+            fail(msg);
         }
         final HttpHeaders headers = getHeaders();
         final HttpEntity<String> request = new HttpEntity<>(data, headers);
@@ -212,8 +235,11 @@ public class GitHubToJiraSteps {
             ResponseEntity<String> response = restTemplate.exchange(COMMIT_FILE_PATH, HttpMethod.PUT, request,
                     String.class);
             createdFileSha = new JSONObject(response.getBody()).getJSONObject("content").getString("sha");
+            log.info("file pushed");
         } catch (Exception e) {
-            fail("faild to push a file: " + e.getMessage());
+            String msg = "faild to push a file: " + e.getMessage();
+            log.error(msg);
+            fail(msg);
         }
     }
 
@@ -222,6 +248,7 @@ public class GitHubToJiraSteps {
         String severities = "(" + flowProperties.getFilterSeverity().stream().collect(Collectors.joining(",")) + ")";
         String fileCommited = COMMIT_FILE_PATH.substring(COMMIT_FILE_PATH.lastIndexOf("/")+1);
         String jql = String.format("project = %s and priority  in %s and summary ~ %s", jiraProperties.getProject(), severities, fileCommited);
+        log.info("jql: {}", jql);
         HashSet<String> fields = new HashSet<String>();
         fields.addAll(
                 Arrays.asList("key", "project", "issuetype", "summary", "labels", "created", "updated", "status"));
@@ -229,14 +256,24 @@ public class GitHubToJiraSteps {
         SearchResult result = null;
         int retries = 0;
         do {
+            log.info("trying to find issue in bug-tracker {}", retries);
             if (++retries >= 20) {
-                fail("failed to find update in Jira after expected time");
+                String msg = "failed to find update in Jira after expected time";
+                log.error(msg);
+                fail(msg);
             }
             Promise<SearchResult> temp = searchClient.searchJql(jql, 10, 0, fields);
+            
+            try {
+                TimeUnit.SECONDS.sleep(5);
+            } catch (InterruptedException ie) {
+                log.info("retry: " + retries);
+            }
+
             try {
                 result = temp.get(500, TimeUnit.MILLISECONDS);
-                TimeUnit.SECONDS.sleep(5);
             } catch (Exception e) {
+                log.info("No result yet");
                 result = null;
                 continue;
             }
