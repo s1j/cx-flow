@@ -18,7 +18,7 @@ jobs:
           key: v1-gradle-wrapper-{{ checksum "gradle/wrapper/gradle-wrapper.properties" }}
       - restore_cache:
           key: v1-gradle-cache-{{ checksum "build.gradle" }}
-      - run: ./gradlew clean build jacocoTestreport
+      - run: ./gradlew clean build jacocoTestreport sonarqube
       - run: ./gradlew -b build-11.gradle --build-cache assemble
       - run: ./gradlew -q getVersion > build/libs/version.txt
       - save_cache:
@@ -47,15 +47,15 @@ jobs:
       - store_artifacts:
           path: ~/test-results/junit
 
-  sonar:
-    machine:
-      image: ubuntu-1604:201903-01
-    steps:
-      - checkout
-      - run:
-          name: Compile
-          command: ./gradlew clean compileJava compileTestJava
-      - sonarcloud/scan
+#  sonar:
+#    machine:
+#      image: ubuntu-1604:201903-01
+#    steps:
+#      - checkout
+#      - run:
+#          name: Compile
+#          command: ./gradlew clean compileJava compileTestJava
+#      - sonarcloud/scan
 
   docker-build:
     executor: docker
@@ -287,24 +287,24 @@ jobs:
             rm ./build/libs/version.txt
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -n ${VERSION} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ./build/libs/
 
-orbs:
-  sonarcloud: sonarsource/sonarcloud@1.0.1
-  aws-eks: circleci/aws-eks@0.2.6
-  kubernetes: circleci/kubernetes@0.4.0
-  helm: circleci/helm@0.2.3
+#orbs:
+#  sonarcloud: sonarsource/sonarcloud@1.0.1
+#  aws-eks: circleci/aws-eks@0.2.6
+#  kubernetes: circleci/kubernetes@0.4.0
+#  helm: circleci/helm@0.2.3
 
 workflows:
   version: 2
-  sonar:
-    jobs:
-      - sonar:
-          context: sonarcloud
-          filters:
-            branches:
-              only: 
-                - develop
-                - /pr-.*/
-                - sonar
+#  sonar:
+#    jobs:
+#      - sonar:
+#          context: sonarcloud
+#          filters:
+#            branches:
+#              only:
+#                - develop
+#                - /pr-.*/
+#                - sonar
   build_deploy:
     jobs:
       - build
