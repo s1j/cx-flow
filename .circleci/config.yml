@@ -210,7 +210,7 @@ jobs:
           name: Run Integration Tests
           command: |
             export HOOK_TARGET=https://cxflow-${CIRCLE_SHA1::7}.${EXTERNAL_DNS_DOMAIN}
-            ./gradlew clean integrationTest jacocoTestreport sonarqube --info -Dtarget=${HOOK_TARGET} -Drepo=${HOOK_REPO} -Dnamespace=${HOOK_NAMESPACE}
+            ./gradlew clean integrationTest --info -Dtarget=${HOOK_TARGET} -Drepo=${HOOK_REPO} -Dnamespace=${HOOK_NAMESPACE}
       - run:
           name: Save test results
           command: |
@@ -221,7 +221,26 @@ jobs:
           path: ~/test-results
       - store_artifacts:
           path: ~/test-results/junit
-  
+
+  sonar-scan:
+    docker:
+      - image: "circleci/openjdk:8-jdk"
+    steps:
+      - checkout
+      - run:
+          name: Run Jacoco and SonarCloud Scan
+          command: ./gradlew jacocoTestreport sonarqube --info
+      - run:
+          name: Save test results
+          command: |
+            mkdir -p ~/test-results/junit/
+            find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} ~/test-results/junit/ \;
+          when: always
+      - store_test_results:
+          path: ~/test-results
+      - store_artifacts:
+          path: ~/test-results/junit
+
   cleanup:
     executor: aws-eks/python3
     parameters:
@@ -344,6 +363,11 @@ workflows:
       - integration-tests:
           requires:
             - deploy-cxflow
+      - sonar-scan:
+          requires:
+#            - e2e-tests
+#            - integration-tests
+            - component-tests
       - docker-push-stable:
           filters:
             branches:
