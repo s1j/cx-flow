@@ -36,6 +36,7 @@ buildscript {
 plugins {
     id 'io.franzbecker.gradle-lombok' version '3.3.0'
     id "ua.eshepelyuk.ManifestClasspath" version "1.0.0"
+    id "jacoco"
 }
 
 apply plugin: 'java'
@@ -124,6 +125,14 @@ test {
 
     useJUnitPlatform()
 }
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+    }
+}
+
+test.finalizedBy jacocoTestReport
 
 task unitTest(type: Test) {
     useJUnitPlatform() {
