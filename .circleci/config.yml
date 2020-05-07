@@ -352,6 +352,7 @@ workflows:
           requires:
             - docker-build
             - component-tests
+            - sonar-scan
       - e2e-tests:
           filters:
             branches:

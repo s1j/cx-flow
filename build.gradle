@@ -143,8 +143,6 @@ jacocoTestReport {
     }
 }
 
-test.finalizedBy jacocoTestReport
-
 task unitTest(type: Test) {
     useJUnitPlatform() {
         systemProperty "testprofile", "unit"
