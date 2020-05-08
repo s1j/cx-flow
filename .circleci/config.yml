@@ -222,24 +222,24 @@ jobs:
       - store_artifacts:
           path: ~/test-results/junit
 
-  sonar-scan:
-    docker:
-      - image: "circleci/openjdk:8-jdk"
-    steps:
-      - checkout
-      - run:
-          name: Run SonarCloud Scan
-          command: ./gradlew sonarqube
-      - run:
-          name: Save test results
-          command: |
-            mkdir -p ~/test-results/junit/
-            find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} ~/test-results/junit/ \;
-          when: always
-      - store_test_results:
-          path: ~/test-results
-      - store_artifacts:
-          path: ~/test-results/junit
+#  sonar-scan:
+#    docker:
+#      - image: "circleci/openjdk:8-jdk"
+#    steps:
+#      - checkout
+#      - run:
+#          name: Run SonarCloud Scan
+#          command: ./gradlew sonarqube
+#      - run:
+#          name: Save test results
+#          command: |
+#            mkdir -p ~/test-results/junit/
+#            find . -type f -regex ".*/build/test-results/.*xml" -exec cp {} ~/test-results/junit/ \;
+#          when: always
+#      - store_test_results:
+#          path: ~/test-results
+#      - store_artifacts:
+#          path: ~/test-results/junit
 
   cleanup:
     executor: aws-eks/python3
@@ -307,23 +307,23 @@ jobs:
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -n ${VERSION} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ./build/libs/
 
 orbs:
-#  sonarcloud: sonarsource/sonarcloud@1.0.1
+  sonarcloud: sonarsource/sonarcloud@1.0.1
   aws-eks: circleci/aws-eks@0.2.6
   kubernetes: circleci/kubernetes@0.4.0
   helm: circleci/helm@0.2.3
 
 workflows:
   version: 2
-#  sonar:
-#    jobs:
-#      - sonar:
-#          context: sonarcloud
-#          filters:
-#            branches:
-#              only:
-#                - develop
-#                - /pr-.*/
-#                - sonar
+  sonar:
+    jobs:
+      - sonar:
+          context: sonarcloud
+          filters:
+            branches:
+              only:
+                - develop
+                - /pr-.*/
+                - sonar
   build_deploy:
     jobs:
       - build
@@ -352,7 +352,6 @@ workflows:
           requires:
             - docker-build
             - component-tests
-            - sonar-scan
       - e2e-tests:
           filters:
             branches:
@@ -364,11 +363,6 @@ workflows:
       - integration-tests:
           requires:
             - deploy-cxflow
-      - sonar-scan:
-          requires:
-#            - e2e-tests
-#            - integration-tests
-            - component-tests
       - docker-push-stable:
           filters:
             branches:
