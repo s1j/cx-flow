@@ -47,15 +47,15 @@ jobs:
       - store_artifacts:
           path: ~/test-results/junit
 
-#  sonar:
-#    machine:
-#      image: ubuntu-1604:201903-01
-#    steps:
-#      - checkout
-#      - run:
-#          name: Compile
-#          command: ./gradlew clean compileJava compileTestJava
-#      - sonarcloud/scan
+  sonar:
+    machine:
+      image: ubuntu-1604:201903-01
+    steps:
+      - checkout
+      - run:
+          name: Compile
+          command: ./gradlew clean compileJava compileTestJava
+      - sonarcloud/scan
 
   docker-build:
     executor: docker
