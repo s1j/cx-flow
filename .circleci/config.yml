@@ -228,8 +228,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Run Jacoco and SonarCloud Scan
-          command: ./gradlew jacocoTestreport sonarqube --info
+          name: Run SonarCloud Scan
+          command: ./gradlew sonarqube
       - run:
           name: Save test results
           command: |
