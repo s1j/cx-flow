@@ -128,9 +128,9 @@ test {
     useJUnitPlatform()
 }
 
-tasks.withType(Test) {
-    finalizedBy jacocoTestReport
-}
+//tasks.withType(Test) {
+//    finalizedBy jacocoTestReport
+//}
 
 // Configure the report to look for executionData generated during the test and integrationTest task
 jacocoTestReport {
@@ -139,10 +139,10 @@ jacocoTestReport {
     reports {
         // for sonarqube
         xml.enabled true
-        xml.destination(file("${project.buildDir}/reports/jacoco/all-tests/jacocoAllTestReport.xml"))
-        // for devs
-        html.enabled true
-        html.destination file("${project.buildDir}/reports/jacoco/all-tests/html")
+        xml.destination(file("${project.buildDir}/test-results/jacocoAllTestReport.xml"))
+//        // for devs
+//        html.enabled true
+//        html.destination file("${project.buildDir}/reports/jacoco/all-tests/html")
     }
 }
 
@@ -152,8 +152,12 @@ sonarqube {
     properties {
         // https://jira.sonarsource.com/browse/MMF-1651
         property "sonar.coverage.jacoco.xmlReportPaths", "${project.buildDir}/test-results"
-        properties["sonar.junit.reportPaths"] += "${project.buildDir}/test-results"
-        properties["sonar.tests"] += sourceSets.integrationTest.allSource.srcDirs
+        property "sonar.jacoco.reportPaths", "${project.buildDir}/test-results"
+        properties["sonar.jacoco.reportPaths"] += "~/test-results/junit"
+//        properties["sonar.junit.reportPaths"] += "${project.buildDir}/test-results"
+        properties["sonar.junit.reportPaths"] += "~/test-results/junit"
+
+//        properties["sonar.tests"] += sourceSets.integrationTest.allSource.srcDirs
         property "sonar.projectKey", "checkmarx-ltd_cx-flow"
         property "sonar.organization", "checkmarx-ltd"
         property "sonar.host.url", "https://sonarcloud.io"

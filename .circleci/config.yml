@@ -167,7 +167,7 @@ jobs:
       - checkout
       - run:
           name: Run Component Tests
-          command: ./gradlew clean componentTest --info
+          command: ./gradlew clean componentTest jacocoTestReport --info
       - run:
           name: Save test results
           command: |
