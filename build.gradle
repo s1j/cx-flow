@@ -46,6 +46,7 @@ apply plugin: 'eclipse'
 apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
 apply plugin: 'com.gorylenko.gradle-git-properties'
+apply plugin: 'jacoco' // code coverage reports
 
 group = 'com.checkmarx'
 version = '1.5.4'
@@ -128,16 +129,18 @@ test {
     useJUnitPlatform()
 }
 
-//tasks.withType(Test) {
-//    finalizedBy jacocoTestReport
-//}
+tasks.withType(Test) {
+    finalizedBy jacocoTestReport
+}
 
 // Configure the report to look for executionData generated during the test and integrationTest task
 jacocoTestReport {
     reports {
         // for sonarqube
         xml.enabled true
+        html.enabled true
         xml.destination(file("${project.buildDir}/test-results/jacocoAllTestReport.xml"))
+        html.destination(file("${project.buildDir}/test-results/jacocoAllTestReport.html"))
     }
 }
 
