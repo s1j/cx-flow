@@ -80,9 +80,11 @@ public class GenericEndToEndSteps {
     public void setScanEngine(String engine) {
         this.engine = engine;
         FlowProperties flowProperties = (FlowProperties)appContext.getBean("flowProperties");
+        log.info("setting scan engine to {word}" , engine);
         flowProperties.setEnabledVulnerabilityScanners(Collections.singletonList(engine));
 
         if (engine.equalsIgnoreCase(ScaProperties.CONFIG_PREFIX)) {
+            log.info("Setting connection urls for CXSCA");
             ScaProperties scaProperties = (ScaProperties)appContext.getBean("scaProperties");
             scaProperties.setAppUrl("https://sca.scacheckmarx.com");
             scaProperties.setApiUrl("https://api.scacheckmarx.com");
@@ -105,33 +107,40 @@ public class GenericEndToEndSteps {
         String content = null;
         try {
             content = getFileInBase64();
+            log.info("ready to push file");
         } catch (IOException e) {
             fail("can not read source file");
         }
         repository.pushFile(content);
+        log.info("file was pushed");
     }
 
     @When("creating pull-request")
     public void createPR() {
         repository.createPR();
+        log.info("pull request was created");
     }
 
     @Then("bug-tracker issues are updated")
     public void validateIssueOnBugTracker() {
         String severities = "(" + flowProperties.getFilterSeverity().stream().collect(Collectors.joining(",")) + ")";
+        log.info("verify the issue was created with severity in {}", severities);
         bugTracker.verifyIssueCreated(severities, engine);
     }
 
     @Then("pull-request is updated")
     public void checkPRUpdate() {
+        log.info("verifying PR was updated");
         repository.verifyPRUpdated();
     }
 
     @After
     public void cleanUp() {
+        log.info("starting clean-up");
         repository.cleanup();
         Optional.ofNullable(bugTracker).ifPresent(BugTracker::deleteIssues);
         SpringApplication.exit(appContext);
+        log.info("finished clean-up");
     }
 
     String getEngine() {
