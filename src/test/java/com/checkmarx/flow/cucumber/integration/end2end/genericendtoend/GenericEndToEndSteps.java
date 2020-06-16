@@ -88,7 +88,7 @@ public class GenericEndToEndSteps {
             ScaProperties scaProperties = (ScaProperties)appContext.getBean("scaProperties");
             scaProperties.setAppUrl("https://sca.scacheckmarx.com");
             scaProperties.setApiUrl("https://api.scacheckmarx.com");
-            scaProperties.setAccessControlUrl("https://v2.ac-checkmarx.com");
+            scaProperties.setAccessControlUrl("https://platform.checkmarx.net");
         }
     }
 
