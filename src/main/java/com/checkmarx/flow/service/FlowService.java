@@ -44,6 +44,7 @@ public class FlowService {
     }
 
     private List<VulnerabilityScanner> getEnabledScanners() {
+        log.info("Scanners are: {}", scanners.toString());
         List<VulnerabilityScanner> enabledScanners = new ArrayList<>();
 
         scanners.forEach(scanner -> {
@@ -51,6 +52,7 @@ public class FlowService {
                 enabledScanners.add(scanner);
             }
         });
+        log.info("Enabled scanners are: {}", enabledScanners.toString());
         return enabledScanners;
     }
 }
