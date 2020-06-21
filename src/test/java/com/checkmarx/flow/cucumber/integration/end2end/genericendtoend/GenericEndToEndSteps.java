@@ -14,6 +14,7 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import lombok.extern.slf4j.Slf4j;
 
+import org.assertj.core.util.Arrays;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -56,7 +57,7 @@ public class GenericEndToEndSteps {
     @And("CxFlow is running as a service")
     public void runAsService() {
         log.info("runnning cx-flow as a service (active profile: {})", engine);
-        appContext = TestUtils.runCxFlowAsServiceWithAdditionalProfiles(engine);
+        appContext = TestUtils.runCxFlowAsServiceWithAdditionalProfiles("--enabled-vulnerability-scanners=" + Arrays.asList(engine));
     }
 
     @And("repository is {word}")
