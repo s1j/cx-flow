@@ -1,10 +1,12 @@
 package com.checkmarx.flow.service;
 
 import com.checkmarx.flow.dto.RepoComment;
+import com.checkmarx.flow.exception.PullRequestCommentUnknown;
+import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class PullRequestCommentsHelper {
 
@@ -29,29 +31,30 @@ public class PullRequestCommentsHelper {
     }
 
     private static CommentType getCommnetType(String newComment) {
-        if (newComment.contains(COMMENT_TYPE_SAST_SCAN_STARTED)) {
-            return CommentType.SCAN_STARTED;
+        for (CommentType ct: CommentType.values()) {
+            boolean found = true;
+            for (String text: ct.getTexts()) {
+                if (!newComment.contains(text)) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return ct;
+            }
         }
-        else if (newComment.contains(COMMENT_TYPE_SAST_FINDINGS_2) &&
-                newComment.contains(COMMENT_TYPE_SAST_FINDINGS_1)) {
-            return CommentType.FINDINGS;
-        }
-        else if (newComment.contains(COMMENT_TYPE_SCA_FINDINGS)) {
-            return CommentType.SCA;
-        }
-        return CommentType.UNKNOWN;
+        throw new PullRequestCommentUnknown("Unknown comment type. content: " + newComment);
     }
 
     private static List<RepoComment> getCheckmarxCommentsForType(List<RepoComment> allComments, CommentType commentType) {
-        if (commentType == CommentType.SCAN_STARTED) {
-            return allComments.stream().filter(rc -> rc.getComment() != null && rc.getComment().contains(COMMENT_TYPE_SAST_SCAN_STARTED)).collect(Collectors.toList());
-        }
-        else if (commentType == CommentType.FINDINGS) {
-            return allComments.stream().filter(rc -> rc.getComment() != null &&
-                    (rc.getComment().contains(COMMENT_TYPE_SAST_FINDINGS_1) && rc.getComment().contains(COMMENT_TYPE_SAST_FINDINGS_2))).collect(Collectors.toList());
+        List<RepoComment> result = new ArrayList<>();
+        for (RepoComment comment: allComments) {
+            if (getCommnetType(comment.getComment()).equals(commentType)) {
+                result.add(comment);
+            }
         }
         // We are not supposed to go in here at all.
-        return new ArrayList<>();
+        return result;
     }
 
     public static boolean shouldUpdateComment(String newComment, String oldComment) {
@@ -65,9 +68,15 @@ public class PullRequestCommentsHelper {
     }
 
     enum CommentType {
-        SCAN_STARTED,
-        FINDINGS,
-        SCA,
-        UNKNOWN;
+        SCAN_STARTED(Arrays.asList(COMMENT_TYPE_SAST_SCAN_STARTED)),
+        FINDINGS(Arrays.asList(COMMENT_TYPE_SAST_FINDINGS_1, COMMENT_TYPE_SAST_FINDINGS_2)),
+        SCA(Arrays.asList(COMMENT_TYPE_SCA_FINDINGS));
+
+        CommentType(List<String> texts) {
+            this.texts = texts;
+        }
+
+        @Getter
+        private List<String> texts;
     }
 }

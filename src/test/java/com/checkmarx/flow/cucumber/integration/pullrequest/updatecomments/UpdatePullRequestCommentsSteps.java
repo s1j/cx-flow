@@ -66,6 +66,8 @@ public class UpdatePullRequestCommentsSteps {
     private FlowProperties flowProperties;
     private CxProperties cxProperties;
     private String branch;
+    private ScannerType scannerType;
+
 
     public UpdatePullRequestCommentsSteps(GitHubService gitHubService, GitHubProperties gitHubProperties, GitHubController gitHubController, ADOService adoService, ADOController adoController, FlowProperties flowProperties, CxProperties cxProperties) {
         this.helperService = mock(HelperService.class);
@@ -95,6 +97,21 @@ public class UpdatePullRequestCommentsSteps {
             deleteADOComments();
         }
     }
+
+    @Given("scanner is set to {string}")
+    public void setScannerToSast(String scanner) {
+        if ("sast".equals(scanner)) {
+            scannerType = ScannerType.SAST;
+            flowProperties.setEnabledVulnerabilityScanners(Arrays.asList("sast"));
+        } else if ("sca".equals(scanner)) {
+            scannerType = ScannerType.SCA;
+            flowProperties.setEnabledVulnerabilityScanners(Arrays.asList("sca"));
+        }
+         else {
+            throw new IllegalArgumentException("Wrong scanner type: " + scanner);
+        }
+    }
+
 
     @Given("branch is pr-comments-tests")
     public void setBranchName() {
@@ -166,7 +183,7 @@ public class UpdatePullRequestCommentsSteps {
         }
     }
 
-    private void validateCommentsUpdated(List<RepoComment> comments) throws IOException {
+    private void validateCommentsUpdated(List<RepoComment> comments) {
         for (RepoComment comment: comments) {
             Assert.assertTrue("Comment was not updated", isCommentUpdated(comment));
         }
@@ -177,12 +194,24 @@ public class UpdatePullRequestCommentsSteps {
         Awaitility.await().atMost(Duration.ofMinutes(2)).pollInterval(Duration.ofSeconds(COMMENTS_POLL_INTERVAL)).until(this::areThereCommentsAtAll);
     }
 
-    @Then("verify 2 new comments")
-    public void verify2NewComments() throws IOException {
+    @Then("verify new comments")
+    public void verifyNewComments() throws IOException {
+        int expectedNumOfComments = getExpectedNumOfNewComments();
+
         List<RepoComment> comments = getRepoComments();
-        Assert.assertEquals("Wrong number of comments", 2, comments.size());
+        Assert.assertEquals("Wrong number of comments", expectedNumOfComments, comments.size());
         comments.stream().forEach(c -> Assert.assertTrue("Comment is not new (probably updated", isCommentNew(c)));
 
+    }
+
+    private int getExpectedNumOfNewComments() {
+        switch (scannerType) {
+            case SCA:
+                return 1;
+            case SAST:
+                return 2;
+        }
+        throw  new RuntimeException("Wrong scanner type");
     }
 
     @Then("Wait for updated comment")
@@ -192,6 +221,9 @@ public class UpdatePullRequestCommentsSteps {
 
     private boolean areThereCommentsAtAll() throws IOException {
         List<RepoComment> comments = getRepoComments();
+        if (scannerType == ScannerType.SCA) {
+            return comments.size() >= 1;
+        }
         return comments.size() > 1;
     }
 
@@ -322,6 +354,11 @@ public class UpdatePullRequestCommentsSteps {
 
     enum SourceControlType {
         GITHUB,
-        ADO;
+        ADO
+    }
+
+    enum ScannerType {
+        SAST,
+        SCA
     }
 }
